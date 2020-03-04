@@ -22,16 +22,19 @@ var (
 
 // Game represents an active state of a game of scrabble
 type Game struct {
+	id         int64
 	board      Board
 	players    []Player
 	Tiles      Tiles
 	Dictionary Dictionary
 	Turn       Turn
+	Turns      []Turn
 }
 
 // Turn represents a unit of action driving the game
 type Turn struct {
 	number int
+	input  string
 	player Player
 }
 
@@ -113,6 +116,7 @@ func LoadFromState(board Board, tiles Tiles, players []Player, turn Turn) Game {
 
 // Player represents an active participant
 type Player struct {
+	id           int64
 	tiles        []Tile
 	score        int
 	Name         string
@@ -193,7 +197,9 @@ func (game *Game) NextPlayer() Player {
 }
 
 // SetNextTurn increments the turn counter and changes players
-func (game *Game) SetNextTurn() {
+func (game *Game) SetNextTurn(action string) {
+	game.Turn.input = action
+	game.Turns = append(game.Turns, game.Turn)
 	game.Turn.number++
 	game.Turn.player = game.NextPlayer()
 }
@@ -238,7 +244,7 @@ func (game *Game) ApplyTurn(input string) error {
 	switch tokens[0] {
 	case "swap":
 		// Format of `swap a b c d`
-		tokens := tokens[1:]
+		tokens = tokens[1:]
 		tiles := parseTiles(tokens)
 		err = game.SwapTiles(tiles)
 
@@ -257,7 +263,7 @@ func (game *Game) ApplyTurn(input string) error {
 		return err
 	}
 
-	game.SetNextTurn()
+	game.SetNextTurn(input)
 
 	return nil
 }

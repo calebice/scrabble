@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -16,24 +17,34 @@ func main() {
 	var game *scrabble.Game
 	var err error
 
-	fmt.Print("Attempt load? (y/n): ")
+	database, err := sql.Open("sqlite3", "./game.db")
+	if err != nil {
+		panic(err)
+	}
+
+	gameDB := scrabble.NewDB(database)
+	err = gameDB.InitDB()
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Print("Load game? (enter id if saved): ")
 	input, _ := reader.ReadString('\n')
 	input = strings.TrimSuffix(input, "\n")
-	switch input {
-	case "y", "Y":
-		game, err = loadState(dataPath)
+	if i, err := strconv.Atoi(input); err == nil {
+		game, err = gameDB.GetGameByID(i)
 		if err != nil {
 			panic(err)
 		}
-	default:
-		game = instantiateNewGame(reader)
+	} else {
+		game = instantiateNewGame(reader, gameDB)
 	}
 
 	runControlLoop(reader, game)
 
 }
 
-func instantiateNewGame(reader *bufio.Reader) *scrabble.Game {
+func instantiateNewGame(reader *bufio.Reader, gameDB scrabble.GameDB) *scrabble.Game {
 	fmt.Print("Please enter number of players: ")
 	input, _ := reader.ReadString('\n')
 	input = strings.TrimSuffix(input, "\n")
@@ -91,10 +102,11 @@ func runControlLoop(reader *bufio.Reader, game *scrabble.Game) {
 			return
 		}
 
-		err = storeState(game)
-		if err != nil {
-			panic(err)
-		}
+		// TODO store state of game using db layer
+		// err = storeState(game)
+		// if err != nil {
+		// 	panic(err)
+		// }
 	}
 }
 
@@ -128,29 +140,3 @@ func loadState(path string) (*scrabble.Game, error) {
 	game := scrabble.LoadFromState(board, tiles, players, turn)
 	return &game, nil
 }
-
-func storeState(game *scrabble.Game) error {
-	file, err := os.Create(dataPath)
-	if err != nil {
-		return err
-	}
-
-	encoder := json.NewEncoder(file)
-	err = encoder.Encode(game.GetBoard())
-	if err != nil {
-		return err
-	}
-	err = encoder.Encode(game.Tiles)
-	if err != nil {
-		return err
-	}
-	err = encoder.Encode(game.GetPlayers())
-	if err != nil {
-		return err
-	}
-	err = encoder.Encode(game.Turn)
-
-	return err
-}
-
-const dataPath = "data/state"
