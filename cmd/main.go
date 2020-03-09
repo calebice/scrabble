@@ -1,5 +1,10 @@
 package main
 
+// TODO(s)
+// - Add better logic around control loop (error handling/retry)
+// - Implement http server package to interact with multiple games at one time
+// - refactor game logic to be more easily packaged into simple http requests
+
 import (
 	"bufio"
 	"database/sql"
@@ -38,13 +43,17 @@ func main() {
 		}
 	} else {
 		game = instantiateNewGame(reader, gameDB)
+		err := gameDB.UpsertGame(game)
+		if err != nil {
+			panic(err)
+		}
 	}
 
-	runControlLoop(reader, game)
+	runControlLoop(reader, game, gameDB)
 
 }
 
-func instantiateNewGame(reader *bufio.Reader, gameDB scrabble.GameDB) *scrabble.Game {
+func instantiateNewGame(reader *bufio.Reader, gameDB *scrabble.GameDB) *scrabble.Game {
 	fmt.Print("Please enter number of players: ")
 	input, _ := reader.ReadString('\n')
 	input = strings.TrimSuffix(input, "\n")
@@ -59,14 +68,15 @@ func instantiateNewGame(reader *bufio.Reader, gameDB scrabble.GameDB) *scrabble.
 		fmt.Printf("Please enter Player %v's name: ", i+1)
 		input, _ := reader.ReadString('\n')
 		input = strings.TrimSuffix(input, "\n")
-
 		players = append(players, input)
 	}
 
-	return scrabble.NewGame(players)
+	return scrabble.NewGame(players, gameDB)
 }
 
-func runControlLoop(reader *bufio.Reader, game *scrabble.Game) {
+func runControlLoop(reader *bufio.Reader, game *scrabble.Game, gameDB *scrabble.GameDB) {
+	fmt.Printf("Current game id: %v\n\n", game.GetID())
+
 	for {
 		fmt.Printf("%s: %v\n%s\n", game.CurrentPlayer().Name,
 			game.CurrentPlayer().Score(), game.CurrentPlayer().Tiles())
@@ -76,7 +86,7 @@ func runControlLoop(reader *bufio.Reader, game *scrabble.Game) {
 		input, _ := reader.ReadString('\n')
 		input = strings.TrimSuffix(input, "\n")
 
-		err := game.ApplyTurn(input)
+		err := game.ApplyTurn(input, gameDB)
 		if err != nil {
 			fmt.Println(err)
 		}

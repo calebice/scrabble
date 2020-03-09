@@ -7,21 +7,23 @@ import (
 
 const shuffleLoop = 20
 
+// Tiles are a collection of tiles stored by the game object
 type Tiles struct {
-	remaining []Tile
+	Remaining []Tile
 }
 
+// Tile a representation of tiles played on the scrabble board
 type Tile struct {
 	Letter  string
-	value   int
+	Value   int
 	IsBlank bool
 }
 
 func (t Tile) String() string {
-	if t.value == 10 {
-		return fmt.Sprintf("[%s%v]", t.Letter, t.value)
+	if t.Value == 10 {
+		return fmt.Sprintf("[%s%v]", t.Letter, t.Value)
 	}
-	return fmt.Sprintf("[%s%v]", t.Letter, t.value)
+	return fmt.Sprintf("[%s%v]", t.Letter, t.Value)
 }
 
 // InitializeTiles sets up the tile bag and then shuffles the entries
@@ -35,44 +37,44 @@ func InitializeTiles() Tiles {
 func (t *Tiles) initializeTiles() {
 	for letter, count := range MapLetterToCount {
 		for i := 0; i < count; i++ {
-			t.remaining = append(t.remaining, getTile(letter))
+			t.Remaining = append(t.Remaining, getTile(letter))
 		}
 	}
 }
 
 func (t *Tiles) shuffle() {
 	for rep := 0; rep < shuffleLoop; rep++ {
-		rand.Shuffle(len(t.remaining), func(i, j int) {
-			t.remaining[i], t.remaining[j] = t.remaining[j], t.remaining[i]
+		rand.Shuffle(len(t.Remaining), func(i, j int) {
+			t.Remaining[i], t.Remaining[j] = t.Remaining[j], t.Remaining[i]
 		})
 	}
 }
 
 // GetTiles returns all of the remaining tiles
 func (t *Tiles) GetTiles() []Tile {
-	return t.remaining
+	return t.Remaining
 }
 
 // Draw pulls the requested number of tiles, or the remaining tiles
 func (t *Tiles) Draw(numDraw int) []Tile {
 	t.shuffle()
-	if numDraw > len(t.remaining) {
-		numDraw = len(t.remaining)
+	if numDraw > len(t.Remaining) {
+		numDraw = len(t.Remaining)
 	}
-	tiles := t.remaining[0:numDraw]
-	t.remaining = t.remaining[numDraw:]
+	tiles := t.Remaining[0:numDraw]
+	t.Remaining = t.Remaining[numDraw:]
 	return tiles
 }
 
 // Return indicates a player is putting tiles back into the bag
 func (t *Tiles) Return(tiles []Tile) {
-	t.remaining = append(t.remaining, tiles...)
+	t.Remaining = append(t.Remaining, tiles...)
 }
 
 func getTile(letter string) Tile {
 	return Tile{
 		Letter: letter,
-		value:  MapLetterToValue[letter],
+		Value:  MapLetterToValue[letter],
 	}
 }
 

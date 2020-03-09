@@ -35,6 +35,7 @@ type Game struct {
 type Turn struct {
 	number int
 	input  string
+	score  int
 	player Player
 }
 
@@ -46,6 +47,11 @@ func (game Game) GetBoard() Board {
 // GetPlayers returns the list of players
 func (game Game) GetPlayers() []Player {
 	return game.players
+}
+
+// GetID returns the id of the game
+func (game Game) GetID() int64 {
+	return game.id
 }
 
 // SetPlayerState takes a changed player condition and updates
@@ -74,7 +80,7 @@ func (game *Game) Draw(num int) []Tile {
 
 // NewGame begins a new game of scrabble
 // Instantiates the tiles
-func NewGame(names []string) *Game {
+func NewGame(names []string, gameDB *GameDB) *Game {
 	tiles := InitializeTiles()
 	board := NewBoard()
 	game := Game{
@@ -83,17 +89,15 @@ func NewGame(names []string) *Game {
 		Tiles:   tiles,
 	}
 
-	game.AddPlayers(names)
+	err := game.AddPlayers(names, gameDB)
+	if err != nil {
+		panic(err)
+	}
 	dict, err := LoadDictionary(dictPath)
 	if err != nil {
 		panic(err)
 	}
 	game.Dictionary = dict
-	game.Turn = Turn{
-		player: game.players[0],
-		number: 1,
-	}
-
 	return &game
 }
 
@@ -117,10 +121,11 @@ func LoadFromState(board Board, tiles Tiles, players []Player, turn Turn) Game {
 // Player represents an active participant
 type Player struct {
 	id           int64
+	pStateID     int64
 	tiles        []Tile
 	score        int
 	Name         string
-	next         *Player
+	nextID       int64
 	highestScore int
 	highestWord  string
 	//TODO add metadata
@@ -165,12 +170,17 @@ func (p Player) HighestScore() int {
 }
 
 // AddPlayers instantiates players into the game
-func (game *Game) AddPlayers(names []string) {
+func (game *Game) AddPlayers(names []string, gameDB *GameDB) error {
 	for _, name := range names {
-		game.players = append(game.players, Player{
+		player := Player{
 			Name:  name,
 			tiles: game.Draw(HandSize),
-		})
+		}
+		err := gameDB.InsertPlayer(&player)
+		if err != nil {
+			return err
+		}
+		game.players = append(game.players, player)
 	}
 
 	// shuffle players for who goes first (and ordering)
@@ -182,8 +192,9 @@ func (game *Game) AddPlayers(names []string) {
 
 	// loops through players and links them to who is next
 	for i := 0; i < len(game.players); i++ {
-		game.players[i].next = &game.players[(i+1)%len(game.players)]
+		game.players[i].nextID = game.players[(i+1)%len(game.players)].id
 	}
+	return nil
 }
 
 // CurrentPlayer returns the active player
@@ -193,22 +204,27 @@ func (game *Game) CurrentPlayer() Player {
 
 // NextPlayer points to the next person to go
 func (game *Game) NextPlayer() Player {
-	return *game.Turn.player.next
+	for _, p := range game.players {
+		if p.id == game.Turn.player.nextID {
+			return p
+		}
+	}
+	panic("could not find requisite player")
 }
 
 // SetNextTurn increments the turn counter and changes players
-func (game *Game) SetNextTurn(action string) {
-	game.Turn.input = action
-	game.Turns = append(game.Turns, game.Turn)
-	game.Turn.number++
-	game.Turn.player = game.NextPlayer()
+func (game *Game) SetNextTurn() {
+	game.Turn = Turn{
+		number: game.Turn.number + 1,
+		player: game.NextPlayer(),
+	}
 }
 
 // End enters the final scoring of the game
 func (game *Game) End() Player {
 	for _, p := range game.players {
 		for _, t := range p.Tiles() {
-			p.score = p.score - t.value
+			p.score = p.score - t.Value
 		}
 	}
 
@@ -232,9 +248,10 @@ func (game *Game) CheckWord(word string) bool {
 }
 
 // ApplyTurn parses user input and
-func (game *Game) ApplyTurn(input string) error {
+func (game *Game) ApplyTurn(input string, gameDB *GameDB) error {
 	var err error
 	var placements []TilePlacement
+	var score int
 
 	tokens := strings.Split(input, " ")
 	if len(tokens) == 0 {
@@ -255,15 +272,22 @@ func (game *Game) ApplyTurn(input string) error {
 		if err != nil {
 			return err
 		}
-		err = game.PlaceTiles(placements)
+		score, err = game.PlaceTiles(placements)
 	default:
 		return ErrInvalidAction
 	}
 	if err != nil {
 		return err
 	}
+	game.Turn.input = input
+	game.Turn.score = score
+	game.Turns = append(game.Turns, game.Turn)
 
-	game.SetNextTurn(input)
+	err = gameDB.SaveState(game)
+	if err != nil {
+		return err
+	}
+	game.SetNextTurn()
 
 	return nil
 }
@@ -273,7 +297,7 @@ func (game *Game) ApplyTurn(input string) error {
 // then validates the
 func (game *Game) SwapTiles(tiles []Tile) error {
 	player := game.CurrentPlayer()
-	if len(game.Tiles.remaining) < len(tiles) {
+	if len(game.Tiles.Remaining) < len(tiles) {
 		return ErrNotEnoughTilesForSwap
 	}
 
@@ -301,32 +325,31 @@ func (game *Game) SwapTiles(tiles []Tile) error {
 
 	player.tiles = append(player.tiles, game.Draw(len(tiles))...)
 	game.Tiles.Return(swapTiles)
-
 	game.SetPlayerState(player)
 
 	return nil
 }
 
 // PlaceTiles denotes an attempt to play a word
-func (game *Game) PlaceTiles(place []TilePlacement) error {
+func (game *Game) PlaceTiles(place []TilePlacement) (int, error) {
 	player := game.CurrentPlayer()
 
 	if game.Turn.number == 1 {
 		if !touchesCenter(place) {
-			return ErrInvalidStart
+			return 0, ErrInvalidStart
 		}
 	}
 
 	err := validateHand(player, place)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	board := game.GetBoard()
 	var words []Word
 	direction, start, err := validateTiles(&board, place)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	// Find new word that is being played linearly
@@ -347,7 +370,7 @@ func (game *Game) PlaceTiles(place []TilePlacement) error {
 	}
 
 	if len(words) == 0 {
-		return ErrNoValidWordsFound
+		return 0, ErrNoValidWordsFound
 	}
 
 	var scoreTotal int
@@ -362,12 +385,7 @@ func (game *Game) PlaceTiles(place []TilePlacement) error {
 	}
 
 	if len(failedWords) > 0 {
-		return ErrInvalidWords{failedWords}
-	}
-
-	if scoreTotal > player.HighestScore() {
-		player.highestScore = scoreTotal
-		player.highestWord = compareWord
+		return 0, ErrInvalidWords{failedWords}
 	}
 
 	for _, p := range place {
@@ -377,12 +395,17 @@ func (game *Game) PlaceTiles(place []TilePlacement) error {
 		scoreTotal += BINGO
 	}
 
+	if scoreTotal > player.HighestScore() {
+		player.highestScore = scoreTotal
+		player.highestWord = compareWord
+	}
+
 	player.Update(scoreTotal, place)
 	player.tiles = append(player.tiles, game.Draw(len(place))...)
 
 	game.SetPlayerState(player)
 	game.SetBoard(board)
-	return nil
+	return scoreTotal, nil
 }
 
 // FindWord takes direction and starting index and finds connected Word
@@ -428,49 +451,6 @@ func FindWord(board Board, direction string, coord Coordinate) (Word, bool) {
 	}
 	sort.Sort(word)
 	return word, true
-}
-
-// Word represents sequence of squares that makes up a scrabble word
-type Word struct {
-	direction string
-	Squares   []Square
-}
-
-// String parses collection of squares into a dictionary formatted word
-func (w Word) String() string {
-	var word string
-	for _, s := range w.Squares {
-		word = fmt.Sprintf("%s%s", word, s.Value.Letter)
-	}
-	return word
-}
-
-// ScoreWord calculates the value of the word
-func (w Word) ScoreWord() int {
-	var total int
-	wordMultiplier := 1
-	for _, s := range w.Squares {
-		if s.Used {
-			total += s.Value.value
-		} else if mult, ok := letterMult[s.Multiplier]; ok {
-			total += mult * s.Value.value
-		} else {
-			total += s.Value.value
-			wordMultiplier *= wordMult[s.Multiplier]
-		}
-	}
-	total = total * wordMultiplier
-	return total
-}
-
-// Sorting implementation to allow organizing all the letters correctly in a word
-func (w Word) Len() int      { return len(w.Squares) }
-func (w Word) Swap(i, j int) { w.Squares[i], w.Squares[j] = w.Squares[j], w.Squares[i] }
-func (w Word) Less(i, j int) bool {
-	if w.direction == "vertical" {
-		return w.Squares[i].Coordinate.x < w.Squares[j].Coordinate.x
-	}
-	return w.Squares[i].Coordinate.y < w.Squares[j].Coordinate.y
 }
 
 // TilePlacement represents a request to place a tile at a particular grid coordinate
@@ -630,46 +610,4 @@ func touchesCenter(place []TilePlacement) bool {
 		}
 	}
 	return false
-}
-
-// ErrNoValidWordsFound represents when a user places a single tile but it forms no words
-var ErrNoValidWordsFound = fmt.Errorf("no valid words found in tile placements")
-
-// ErrTileNotInHand represents an attempt at using a tile that a player does not have
-var ErrTileNotInHand = fmt.Errorf("Tile requested for action but not found")
-
-// ErrNotEnoughTilesForSwap when a player requests a swap that is greater than total tiles remaining
-var ErrNotEnoughTilesForSwap = fmt.Errorf("Could not perform swap, not enough tiles remaining")
-
-// ErrWordDisconnected represents a word placement that is not connected
-var ErrWordDisconnected = fmt.Errorf("Word placement invalid, gap between letters found")
-
-// ErrInvalidPlacement represents an failed attempt to place a tile non-linearly
-var ErrInvalidPlacement = fmt.Errorf("Word placement invalid, must place only horizontal or vertically")
-
-// ErrInvalidSpace indicates an invalid tile placement
-var ErrInvalidSpace = fmt.Errorf("Provided space is illegal. Must be in range of [0,%v], [0,%v]", Size-1, Size-1)
-
-// ErrInvalidStart starting turn requires tile be placed in center of board
-var ErrInvalidStart = fmt.Errorf("Starting move must touch center tile")
-
-// ErrInvalidAction is when a user attempts to perform an illegal operation
-var ErrInvalidAction = fmt.Errorf("Invalid action requested: allowed [swap, place]")
-
-// ErrSpaceOccupied represents an error for an already occupied coordinate on the board
-type ErrSpaceOccupied struct {
-	Location Coordinate
-}
-
-func (e ErrSpaceOccupied) Error() string {
-	return fmt.Sprintf("Could not place tile: Space [%v, %v] already occupied", e.Location.x, e.Location.y)
-}
-
-// ErrInvalidWords represents a set of words that are created by the move that are invalid
-type ErrInvalidWords struct {
-	failedWords []string
-}
-
-func (e ErrInvalidWords) Error() string {
-	return fmt.Sprintf("Invalid words: %v", e.failedWords)
 }

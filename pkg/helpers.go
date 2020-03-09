@@ -35,13 +35,13 @@ func parseTilePlacements(tokens []string) ([]TilePlacement, error) {
 		rawX := coord[0]
 		rawY := coord[1]
 
-		x, err := strconv.Atoi(rawX)
+		y, err := strconv.Atoi(rawY)
 		if err != nil {
 			return nil, err
 		}
 
-		runeY := []rune(rawY)
-		y := toInt(runeY[0])
+		runeX := []rune(rawX)
+		x := toInt(runeX[0])
 		if y > 15 || y < 1 {
 			return nil, ErrInvalidIndex
 		}
@@ -49,7 +49,7 @@ func parseTilePlacements(tokens []string) ([]TilePlacement, error) {
 		if strings.HasPrefix(letter, "_") {
 			tilePlacements = append(tilePlacements, TilePlacement{
 				Location: Coordinate{x, y},
-				Tile:     Tile{Letter: letter, value: 0, IsBlank: true},
+				Tile:     Tile{Letter: letter, Value: 0, IsBlank: true},
 			})
 		} else {
 			tilePlacements = append(tilePlacements, TilePlacement{
@@ -75,6 +75,15 @@ func toInt(char rune) int {
 
 func toRune(i int) rune {
 	return rune('a' - 1 + i)
+}
+
+func findPlayer(players []Player, id int64) *Player {
+	for _, p := range players {
+		if p.id == id {
+			return &p
+		}
+	}
+	return nil
 }
 
 // Errors in handling parsing an error in user input

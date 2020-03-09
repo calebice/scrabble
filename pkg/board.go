@@ -54,11 +54,11 @@ func (b Board) String() string {
 	var str string
 	str = fmt.Sprint("   ")
 	for i := 1; i <= Size; i++ {
-		str = fmt.Sprintf("%s|_%s_|", str, string(toRune(i)))
+		str = fmt.Sprintf("%s|%2v| ", str, i)
 	}
 	str = fmt.Sprintf("%s\n", str)
 	for i, a := range b {
-		str = fmt.Sprintf("%s%2v| ", str, i+1)
+		str = fmt.Sprintf("%s%s| ", str, string(toRune(i+1)))
 		for _, y := range a {
 			str = fmt.Sprintf("%s%s ", str, y)
 		}
@@ -71,6 +71,7 @@ func (b Board) String() string {
 // @Value occupying Tile
 // @Multiplier multiplier to apply to letter or word
 // @Used whether multiplier has been applied to a score
+// @Coordinate represents location on the board square occupies
 type Square struct {
 	Value      Tile
 	Multiplier string
