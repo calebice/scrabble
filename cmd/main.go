@@ -93,12 +93,29 @@ func instantiateNewGame(reader *bufio.Reader, gameDB *scrabble.GameDB) *scrabble
 		instantiateNewGame(reader, gameDB)
 	}
 
-	var players []string
+	var players []scrabble.PlayerRequest
 	for i := 0; i < playerCount; i++ {
+		var playerReq scrabble.PlayerRequest
+
 		fmt.Printf("Please enter Player %v's name: ", i+1)
+		name, _ := reader.ReadString('\n')
+		name = strings.TrimSuffix(name, "\n")
+		playerReq.Name = name
+
+		fmt.Printf("Use plaintext? (y/n): ")
 		input, _ := reader.ReadString('\n')
 		input = strings.TrimSuffix(input, "\n")
-		players = append(players, input)
+		switch input {
+		case "y", "Y":
+			playerReq.UsePlainText = true
+		default:
+			playerReq.UsePlainText = false
+		}
+		players = append(players, playerReq)
+	}
+
+	for _, p := range players {
+		fmt.Printf("%+v\n", p)
 	}
 
 	return scrabble.NewGame(players, gameDB)
@@ -111,7 +128,7 @@ func runControlLoop(reader *bufio.Reader, game *scrabble.Game, gameDB *scrabble.
 		current := game.CurrentPlayer()
 		fmt.Printf("%s: %v\n%s\n", current.Name,
 			current.Score(), current.Tiles())
-		fmt.Println(game.GetBoard())
+		fmt.Println(game.GetBoard().FormatPrint(current.UsePlainText))
 
 		fmt.Print("Please enter move: ")
 		input, _ := reader.ReadString('\n')

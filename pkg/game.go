@@ -98,7 +98,7 @@ func (game *Game) Draw(num int) []Tile {
 
 // NewGame begins a new game of scrabble
 // Instantiates the tiles
-func NewGame(names []string, gameDB *GameDB) *Game {
+func NewGame(playerReq []PlayerRequest, gameDB *GameDB) *Game {
 	tiles := InitializeTiles()
 	board := NewBoard()
 	game := Game{
@@ -107,7 +107,7 @@ func NewGame(names []string, gameDB *GameDB) *Game {
 		Tiles:   tiles,
 	}
 
-	err := game.AddPlayers(names, gameDB)
+	err := game.AddPlayers(playerReq, gameDB)
 	if err != nil {
 		panic(err)
 	}
@@ -141,63 +141,13 @@ func LoadFromState(board Board, tiles Tiles, players []Player, turn Turn) Game {
 	}
 }
 
-// Player represents an active participant
-type Player struct {
-	id           int64
-	pStateID     int64
-	tiles        []Tile
-	score        int
-	Name         string
-	nextID       int64
-	highestScore int
-	highestWord  string
-	//TODO add metadata
-}
-
-// Update adds a players score from the round to their total
-// Also updates the players tiles using placed tiles
-func (p *Player) Update(addScore int, place []TilePlacement) {
-	p.score += addScore
-	for _, pl := range place {
-		for i, t := range p.tiles {
-			if pl.Tile == t {
-				// remove found tile from hand
-				if i == len(p.tiles) {
-					p.tiles = p.tiles[:i]
-				} else {
-					p.tiles = append(p.tiles[:i], p.tiles[i+1:]...)
-				}
-			}
-		}
-	}
-}
-
-// Tiles returns a users tiles for accessing
-func (p Player) Tiles() []Tile {
-	return p.tiles
-}
-
-// Score returns a players score
-func (p Player) Score() int {
-	return p.score
-}
-
-// HighestWord returns the maximum scored word a player has played
-func (p Player) HighestWord() string {
-	return p.highestWord
-}
-
-// HighestScore returns the highest score a player has hit in one turn
-func (p Player) HighestScore() int {
-	return p.highestScore
-}
-
 // AddPlayers instantiates players into the game
-func (game *Game) AddPlayers(names []string, gameDB *GameDB) error {
-	for _, name := range names {
+func (game *Game) AddPlayers(playerRequests []PlayerRequest, gameDB *GameDB) error {
+	for _, p := range playerRequests {
 		player := Player{
-			Name:  name,
-			tiles: game.Draw(HandSize),
+			Name:         p.Name,
+			UsePlainText: p.UsePlainText,
+			tiles:        game.Draw(HandSize),
 		}
 		err := gameDB.InsertPlayer(&player)
 		if err != nil {

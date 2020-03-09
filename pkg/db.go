@@ -24,7 +24,8 @@ type GameDB struct {
 // users: users of the scrabble game
 const createUsersTable = `CREATE TABLE if not exists users(
 	id INTEGER PRIMARY KEY,
-	name TEXT
+	name TEXT,
+	use_plaintext BOOLEAN
 )`
 
 // games: holds board and remaining tile information
@@ -173,7 +174,7 @@ func (db *GameDB) GetGameByID(id int) (*Game, error) {
 	// name, score, tiles, next player
 	// join tables linking user_id to player_states.player_id
 	playersQuery := `
-		SELECT users.id, player_states.id, users.name, player_states.score, player_states.tiles, player_states.next
+		SELECT users.id, player_states.id, users.name, users.use_plaintext, player_states.score, player_states.tiles, player_states.next
 		FROM users JOIN player_states ON users.id = player_states.player_id
 		WHERE player_states.game_id = ?`
 	statement, err = db.db.Prepare(playersQuery)
@@ -189,7 +190,7 @@ func (db *GameDB) GetGameByID(id int) (*Game, error) {
 		var player Player
 		var tileBytes []byte
 
-		rows.Scan(&player.id, &player.pStateID, &player.Name, &player.score, &tileBytes, &player.nextID)
+		rows.Scan(&player.id, &player.pStateID, &player.Name, &player.UsePlainText, &player.score, &tileBytes, &player.nextID)
 		err = json.Unmarshal(tileBytes, &player.tiles)
 		if err != nil {
 			return nil, err
@@ -448,8 +449,8 @@ func (db *GameDB) InsertPlayer(player *Player) error {
 		return nil
 	}
 
-	statement, _ := db.db.Prepare("INSERT INTO users (name) VALUES (?)")
-	result, err := statement.Exec(player.Name)
+	statement, _ := db.db.Prepare("INSERT INTO users (name, use_plaintext) VALUES (?, ?)")
+	result, err := statement.Exec(player.Name, player.UsePlainText)
 	if err != nil {
 		return err
 	}
@@ -464,7 +465,7 @@ func (db *GameDB) InsertPlayer(player *Player) error {
 func (db *GameDB) getUserByName(name string) (*Player, error) {
 	var player Player
 
-	getQuery := `SELECT id, name FROM users WHERE name = ?`
+	getQuery := `SELECT id, name, use_plaintext FROM users WHERE name = ?`
 	statement, err := db.db.Prepare(getQuery)
 	if err != nil {
 		return nil, err
@@ -474,7 +475,7 @@ func (db *GameDB) getUserByName(name string) (*Player, error) {
 		return nil, err
 	}
 	for rows.Next() {
-		rows.Scan(&player.id, &player.Name)
+		rows.Scan(&player.id, &player.Name, &player.UsePlainText)
 	}
 	if player.id == 0 {
 		return nil, nil

@@ -50,6 +50,45 @@ func NewBoard() Board {
 	return Board
 }
 
+// FormatPrint prints out either standard board or board formatted for plain text
+func (b Board) FormatPrint(usePlainText bool) string {
+	var str string
+	if usePlainText {
+		// Case of printing to plain text (spaces/letters have different sizes)
+		str = fmt.Sprint("    ")
+		for i := 1; i <= Size; i++ {
+			switch i {
+			case 1, 6:
+				str = fmt.Sprintf("%s |_%v|  ", str, i)
+			case 12, 14:
+				str = fmt.Sprintf("%s|%v| ", str, i)
+			case 10, 11, 13, 15:
+				str = fmt.Sprintf("%s |%v| ", str, i)
+			default:
+				str = fmt.Sprintf("%s|_%v| ", str, i)
+			}
+		}
+		str = fmt.Sprintf("%s\n", str)
+		for i, a := range b {
+			letter := string(toRune(i + 1))
+			switch letter {
+			case "f", "i", "j", "l":
+				str = fmt.Sprintf("%s%s  |", str, letter)
+			default:
+				str = fmt.Sprintf("%s%s |", str, letter)
+			}
+			for _, y := range a {
+				str = fmt.Sprintf("%s%s ", str, y)
+			}
+			str = fmt.Sprintf("%s\n", str)
+		}
+	} else {
+		str = b.String()
+	}
+	return str
+
+}
+
 func (b Board) String() string {
 	var str string
 	str = fmt.Sprint("   ")
