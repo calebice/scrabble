@@ -4,11 +4,12 @@ package main
 // - Add better logic around control loop (error handling/retry)
 // - Implement http server package to interact with multiple games at one time
 // - refactor game logic to be more easily packaged into simple http requests
+// - connect options to actual logic to perform requested function
+// - add end state of game logic implemntation
 
 import (
 	"bufio"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
@@ -33,34 +34,63 @@ func main() {
 		panic(err)
 	}
 
-	fmt.Print("Load game? (enter id if saved): ")
-	input, _ := reader.ReadString('\n')
-	input = strings.TrimSuffix(input, "\n")
-	if i, err := strconv.Atoi(input); err == nil {
-		game, err = gameDB.GetGameByID(i)
-		if err != nil {
-			panic(err)
+	fmt.Println(listOptions())
+
+	for game == nil {
+		action := getAction(reader)
+
+		switch action {
+		case "new":
+			game = instantiateNewGame(reader, gameDB)
+		case "load":
+			game, err = loadGameInput(reader, gameDB)
+		default:
+			panic(fmt.Sprintf("Requested action not implemented: %q", action))
 		}
-	} else {
-		game = instantiateNewGame(reader, gameDB)
-		err := gameDB.UpsertGame(game)
 		if err != nil {
-			panic(err)
+			fmt.Printf("Could not perform requested action: %v", err)
 		}
 	}
 
 	runControlLoop(reader, game, gameDB)
+}
 
+func getAction(reader *bufio.Reader) string {
+	fmt.Println(listOptions())
+
+	fmt.Print("Please enter requested action: ")
+	input, _ := reader.ReadString('\n')
+	input = strings.TrimSuffix(input, "\n")
+	input = strings.TrimSpace(input)
+	if _, ok := optionsMap[input]; ok {
+		return input
+	}
+	fmt.Println("Invalid action requested: ", input)
+	return getAction(reader)
+}
+
+func listOptions() string {
+	str := fmt.Sprintf("Available Options\n--------------------------\n")
+	for opt, info := range optionsMap {
+		str = fmt.Sprintf("%s%s: %s\n", str, opt, info)
+	}
+	return str
 }
 
 func instantiateNewGame(reader *bufio.Reader, gameDB *scrabble.GameDB) *scrabble.Game {
-	fmt.Print("Please enter number of players: ")
+	fmt.Print("Please enter number of players [1-4]: ")
 	input, _ := reader.ReadString('\n')
 	input = strings.TrimSuffix(input, "\n")
 
 	playerCount, err := strconv.Atoi(input)
 	if err != nil {
-		panic(err)
+		fmt.Println("Invalid input for players")
+		instantiateNewGame(reader, gameDB)
+	}
+
+	if playerCount < 1 || playerCount > 4 {
+		fmt.Println("Invalid number of players")
+		instantiateNewGame(reader, gameDB)
 	}
 
 	var players []string
@@ -78,18 +108,21 @@ func runControlLoop(reader *bufio.Reader, game *scrabble.Game, gameDB *scrabble.
 	fmt.Printf("Current game id: %v\n\n", game.GetID())
 
 	for {
-		fmt.Printf("%s: %v\n%s\n", game.CurrentPlayer().Name,
-			game.CurrentPlayer().Score(), game.CurrentPlayer().Tiles())
+		current := game.CurrentPlayer()
+		fmt.Printf("%s: %v\n%s\n", current.Name,
+			current.Score(), current.Tiles())
 		fmt.Println(game.GetBoard())
 
 		fmt.Print("Please enter move: ")
 		input, _ := reader.ReadString('\n')
 		input = strings.TrimSuffix(input, "\n")
 
-		err := game.ApplyTurn(input, gameDB)
+		result, err := game.ApplyTurn(input, gameDB)
 		if err != nil {
 			fmt.Println(err)
 		}
+
+		fmt.Printf("%s: %s", current.Name, result.String())
 
 		fmt.Println()
 
@@ -111,42 +144,26 @@ func runControlLoop(reader *bufio.Reader, game *scrabble.Game, gameDB *scrabble.
 			}
 			return
 		}
-
-		// TODO store state of game using db layer
-		// err = storeState(game)
-		// if err != nil {
-		// 	panic(err)
-		// }
 	}
 }
 
-func loadState(path string) (*scrabble.Game, error) {
-	var board scrabble.Board
-	var players []scrabble.Player
-	var turn scrabble.Turn
-	var tiles scrabble.Tiles
+var optionsMap = map[string]string{
+	"list":   "list all current games",
+	"new":    "create a new game",
+	"load":   "load a game using game id",
+	"delete": "delete a game using id",
+	"stats":  "display stats for a given player",
+}
 
-	file, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	err = json.NewDecoder(file).Decode(&board)
-	if err != nil {
-		return nil, err
-	}
-	err = json.NewDecoder(file).Decode(&tiles)
-	if err != nil {
-		return nil, err
-	}
-	err = json.NewDecoder(file).Decode(&players)
-	if err != nil {
-		return nil, err
-	}
-	err = json.NewDecoder(file).Decode(&turn)
-	if err != nil {
-		return nil, err
-	}
+func loadGameInput(reader *bufio.Reader, gameDB *scrabble.GameDB) (*scrabble.Game, error) {
+	fmt.Print("Please enter game ID: ")
+	input, _ := reader.ReadString('\n')
+	input = strings.TrimSuffix(input, "\n")
 
-	game := scrabble.LoadFromState(board, tiles, players, turn)
-	return &game, nil
+	i, err := strconv.Atoi(input)
+	if err != nil {
+		fmt.Printf("Invalid game id %q. Please enter a valid id\n", input)
+		loadGameInput(reader, gameDB)
+	}
+	return gameDB.GetGameByID(i)
 }

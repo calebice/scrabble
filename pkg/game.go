@@ -39,6 +39,24 @@ type Turn struct {
 	player Player
 }
 
+// Result represents a struct response for a requested turn
+type Result struct {
+	Words   []Word
+	Score   int
+	Swapped int
+	Action  string
+}
+
+func (r Result) String() string {
+	switch r.Action {
+	case "swap":
+		return fmt.Sprintf("successfully swapped %v tiles", r.Swapped)
+	case "place":
+		return fmt.Sprintf("successfully placed %v for %v points", r.Words, r.Score)
+	}
+	return "no action implemented"
+}
+
 // GetBoard returns the game board
 func (game Game) GetBoard() Board {
 	return game.board
@@ -98,6 +116,11 @@ func NewGame(names []string, gameDB *GameDB) *Game {
 		panic(err)
 	}
 	game.Dictionary = dict
+
+	err = gameDB.UpsertGame(&game)
+	if err != nil {
+		panic(err)
+	}
 	return &game
 }
 
@@ -248,36 +271,42 @@ func (game *Game) CheckWord(word string) bool {
 }
 
 // ApplyTurn parses user input and
-func (game *Game) ApplyTurn(input string, gameDB *GameDB) error {
+func (game *Game) ApplyTurn(input string, gameDB *GameDB) (Result, error) {
 	var err error
 	var placements []TilePlacement
 	var score int
+	var words []Word
+	var result Result
 
 	tokens := strings.Split(input, " ")
 	if len(tokens) == 0 {
-		return ErrInvalidAction
+		return Result{}, ErrInvalidAction
 	}
 
+	result.Action = tokens[0]
 	switch tokens[0] {
 	case "swap":
 		// Format of `swap a b c d`
 		tokens = tokens[1:]
 		tiles := parseTiles(tokens)
 		err = game.SwapTiles(tiles)
+		result.Swapped = len(tiles)
 
 	case "place":
 		// Format of `place a(1,a) b(2,a)`
 		tilePlacements := tokens[1:]
 		placements, err = parseTilePlacements(tilePlacements)
 		if err != nil {
-			return err
+			return Result{}, err
 		}
-		score, err = game.PlaceTiles(placements)
+		words, score, err = game.PlaceTiles(placements)
+		result.Words = words
+		result.Score = score
 	default:
-		return ErrInvalidAction
+		return Result{}, ErrInvalidAction
 	}
 	if err != nil {
-		return err
+		return Result{}, err
 	}
 	game.Turn.input = input
 	game.Turn.score = score
@@ -285,11 +314,11 @@ func (game *Game) ApplyTurn(input string, gameDB *GameDB) error {
 
 	err = gameDB.SaveState(game)
 	if err != nil {
-		return err
+		return Result{}, err
 	}
 	game.SetNextTurn()
 
-	return nil
+	return result, nil
 }
 
 // SwapTiles is a move a player can execute that puts tiles from their hands back into bag
@@ -331,25 +360,25 @@ func (game *Game) SwapTiles(tiles []Tile) error {
 }
 
 // PlaceTiles denotes an attempt to play a word
-func (game *Game) PlaceTiles(place []TilePlacement) (int, error) {
+func (game *Game) PlaceTiles(place []TilePlacement) ([]Word, int, error) {
 	player := game.CurrentPlayer()
 
 	if game.Turn.number == 1 {
 		if !touchesCenter(place) {
-			return 0, ErrInvalidStart
+			return nil, 0, ErrInvalidStart
 		}
 	}
 
 	err := validateHand(player, place)
 	if err != nil {
-		return 0, err
+		return nil, 0, err
 	}
 
 	board := game.GetBoard()
 	var words []Word
 	direction, start, err := validateTiles(&board, place)
 	if err != nil {
-		return 0, err
+		return nil, 0, err
 	}
 
 	// Find new word that is being played linearly
@@ -370,7 +399,7 @@ func (game *Game) PlaceTiles(place []TilePlacement) (int, error) {
 	}
 
 	if len(words) == 0 {
-		return 0, ErrNoValidWordsFound
+		return nil, 0, ErrNoValidWordsFound
 	}
 
 	var scoreTotal int
@@ -385,7 +414,7 @@ func (game *Game) PlaceTiles(place []TilePlacement) (int, error) {
 	}
 
 	if len(failedWords) > 0 {
-		return 0, ErrInvalidWords{failedWords}
+		return nil, 0, ErrInvalidWords{failedWords}
 	}
 
 	for _, p := range place {
@@ -405,7 +434,7 @@ func (game *Game) PlaceTiles(place []TilePlacement) (int, error) {
 
 	game.SetPlayerState(player)
 	game.SetBoard(board)
-	return scoreTotal, nil
+	return words, scoreTotal, nil
 }
 
 // FindWord takes direction and starting index and finds connected Word

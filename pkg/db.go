@@ -234,10 +234,20 @@ func (db *GameDB) GetGameByID(id int) (*Game, error) {
 	}
 
 	// find current player and create a fill in turn for game state
-	player := findPlayer(players, nextID)
-	current := Turn{
-		number: maxNum + 1,
-		player: *player,
+	var current Turn
+	// if game was started but no moves made, set initial player
+	if len(turns) == 0 {
+		current = Turn{
+			number: maxNum + 1,
+			player: players[0],
+		}
+	} else {
+		// find and set desired player
+		player := findPlayer(players, nextID)
+		current = Turn{
+			number: maxNum + 1,
+			player: *player,
+		}
 	}
 
 	game.Turns = turns

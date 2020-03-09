@@ -54,11 +54,15 @@ func (b Board) String() string {
 	var str string
 	str = fmt.Sprint("   ")
 	for i := 1; i <= Size; i++ {
-		str = fmt.Sprintf("%s|%2v| ", str, i)
+		if i > 9 {
+			str = fmt.Sprintf("%s|%2v| ", str, i)
+		} else {
+			str = fmt.Sprintf("%s|_%v| ", str, i)
+		}
 	}
 	str = fmt.Sprintf("%s\n", str)
 	for i, a := range b {
-		str = fmt.Sprintf("%s%s| ", str, string(toRune(i+1)))
+		str = fmt.Sprintf("%s%s |", str, string(toRune(i+1)))
 		for _, y := range a {
 			str = fmt.Sprintf("%s%s ", str, y)
 		}
