@@ -48,8 +48,8 @@ func parseTilePlacements(tokens []string) ([]TilePlacement, error) {
 
 		if strings.HasPrefix(letter, "_") {
 			tilePlacements = append(tilePlacements, TilePlacement{
-				Location: Coordinate{x, y},
-				Tile:     Tile{Letter: letter, Value: 0, IsBlank: true},
+				Location: Coordinate{x - 1, y - 1},
+				Tile:     Tile{Letter: strings.TrimPrefix(letter, "_"), Value: 0, IsBlank: true},
 			})
 		} else {
 			tilePlacements = append(tilePlacements, TilePlacement{

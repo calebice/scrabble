@@ -46,8 +46,15 @@ func NewBoard() Board {
 			}
 		}
 	}
-
 	return Board
+}
+
+func (b *Board) setCoordinates() {
+	for i, row := range b {
+		for j := range row {
+			b[i][j].Coordinate = Coordinate{i, j}
+		}
+	}
 }
 
 // FormatPrint prints out either standard board or board formatted for plain text

@@ -165,6 +165,7 @@ func (db *GameDB) GetGameByID(id int) (*Game, error) {
 	if err != nil {
 		return nil, err
 	}
+	game.board.setCoordinates()
 	err = json.Unmarshal(tileBytes, &game.Tiles)
 	if err != nil {
 		return nil, err
