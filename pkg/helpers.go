@@ -40,6 +40,7 @@ func parseTilePlacements(tokens []string) ([]TilePlacement, error) {
 			return nil, err
 		}
 
+		rawX = strings.ToLower(rawX)
 		runeX := []rune(rawX)
 		x := toInt(runeX[0])
 		if y > 15 || y < 1 {

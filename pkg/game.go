@@ -479,9 +479,14 @@ func validateTiles(board *Board, place []TilePlacement) (direction string, start
 	// verify all tiles are in bounds
 	// verify all tiles are in the same horizontal or vertical direction
 	var lastX, lastY int
-	var empty Tile
 	// represent the earliest and latest x,y coordinates to verify board completeness
 	var firstX, finalX, firstY, finalY int
+
+	tempBoard := NewBoard()
+
+	// connected determines if the move played is connected to existing pieces
+	// provided this is not the first turn
+	var connected bool
 
 	// This check allows for single placements to be calculated
 	if len(place) == 1 {
@@ -496,8 +501,14 @@ func validateTiles(board *Board, place []TilePlacement) (direction string, start
 			err = ErrInvalidSpace
 			return
 		}
+
+		if !tempBoard[x][y].IsEmpty() {
+			err = ErrInvalidPlacement
+			return
+		}
+
 		// Verify placement is not already filled
-		if board[x][y].Value != empty {
+		if !board[x][y].IsEmpty() {
 			err = ErrSpaceOccupied{
 				Location: t.Location,
 			}
@@ -556,7 +567,10 @@ func validateTiles(board *Board, place []TilePlacement) (direction string, start
 				}
 			}
 		}
-		board[x][y].Value = t.Tile
+		// TODO Set temp value for a board at suggested coordinates
+		// (to ensure the board is all connected)
+		// after going through, if "connected" is set then
+		tempBoard[x][y].Value = t.Tile
 		lastX, lastY = x, y
 	}
 
@@ -564,22 +578,50 @@ func validateTiles(board *Board, place []TilePlacement) (direction string, start
 	switch direction {
 	case "horizontal":
 		for y := firstY; y <= finalY; y++ {
-			if board[lastX][y].IsEmpty() {
+			if board[lastX][y].IsEmpty() && tempBoard[lastX][y].IsEmpty() {
 				err = ErrWordDisconnected
 				return
+			}
+			// check connectedness to real board
+			if !board[lastX][y].IsEmpty() {
+				connected = true
 			}
 		}
 		start = Coordinate{lastX, firstY}
 	case "vertical":
 		for x := firstX; x <= finalX; x++ {
-			if board[x][lastY].IsEmpty() {
+			if board[x][lastY].IsEmpty() && tempBoard[x][lastY].IsEmpty() {
 				err = ErrWordDisconnected
 				return
+			}
+			// check connectedness to real board
+			if !board[x][lastY].IsEmpty() {
+				connected = true
 			}
 		}
 		start = Coordinate{firstX, lastY}
 	}
+
+	// Case of first turn
+	if board.IsEmpty() {
+		board.JoinBoards(tempBoard)
+		return
+	}
+
+	if connected {
+		board.JoinBoards(tempBoard)
+		return
+	}
+
+	// Verify both boards intersect
+	if board.CheckConnect(place) {
+		board.JoinBoards(tempBoard)
+		return
+	}
+
+	err = ErrNoConnectionPoint
 	return
+
 }
 
 func touchesCenter(place []TilePlacement) bool {

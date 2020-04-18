@@ -14,11 +14,17 @@ var ErrNotEnoughTilesForSwap = fmt.Errorf("Could not perform swap, not enough ti
 // ErrWordDisconnected represents a word placement that is not connected
 var ErrWordDisconnected = fmt.Errorf("Word placement invalid, gap between letters found")
 
+// ErrNoConnectionPoint represents a word placement that is not against existing tiles
+var ErrNoConnectionPoint = fmt.Errorf("Word placement invalid, placed word not connected to existing tiles")
+
 // ErrInvalidPlacement represents an failed attempt to place a tile non-linearly
 var ErrInvalidPlacement = fmt.Errorf("Word placement invalid, must place only horizontal or vertically")
 
+// ErrRepeatedPlacement represents a placement where two tiles are attempted to be played in same spot
+var ErrRepeatedPlacement = fmt.Errorf("Word placement invalid, played tiles in the same position")
+
 // ErrInvalidSpace indicates an invalid tile placement
-var ErrInvalidSpace = fmt.Errorf("Provided space is illegal. Must be in range of [0,%v], [0,%v]", Size-1, Size-1)
+var ErrInvalidSpace = fmt.Errorf("Provided space is illegal. Must be in range of [a,%s], [0,%v]", string(toRune(Size-1)), Size-1)
 
 // ErrInvalidStart starting turn requires tile be placed in center of board
 var ErrInvalidStart = fmt.Errorf("Starting move must touch center tile")

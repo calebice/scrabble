@@ -2,6 +2,7 @@ package scrabble
 
 import (
 	"fmt"
+	"reflect"
 )
 
 // Board represents the view of the scrabble board
@@ -145,6 +146,38 @@ func (s Square) IsEmpty() bool {
 // prevents duplicate multiplier applications
 func (b *Board) SetSquareUsed(coordinate Coordinate) {
 	b[coordinate.x][coordinate.y].Used = true
+}
+
+func (b *Board) CheckConnect(place []TilePlacement) bool {
+	for _, p := range place {
+		x, y := p.Location.x, p.Location.y
+		lx, hx, ly, hy := x-1, x+1, y-1, y+1
+		if !b[lx][y].IsEmpty() || !b[hx][y].IsEmpty() || !b[x][ly].IsEmpty() || !b[x][hy].IsEmpty() {
+			return true
+		}
+	}
+	return false
+}
+
+// JoinBoards will set all values from an inbound board onto existing board
+// Caution: will overwrite board values if already set
+func (b *Board) JoinBoards(temp Board) {
+	for x := 0; x < Size; x++ {
+		for y := 0; y < Size; y++ {
+			if !temp[x][y].IsEmpty() {
+				b[x][y] = temp[x][y]
+			}
+		}
+	}
+}
+
+func (b *Board) IsEmpty() bool {
+	tmp := NewBoard()
+	if reflect.DeepEqual(b, &tmp) {
+		return true
+	}
+
+	return false
 }
 
 /* Board Structure
