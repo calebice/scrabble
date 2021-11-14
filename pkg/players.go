@@ -24,16 +24,31 @@ type Player struct {
 func (p *Player) Update(addScore int, place []TilePlacement) {
 	p.score += addScore
 	for _, pl := range place {
+		var found bool
+		blankID := -1
 		for i, t := range p.tiles {
+			if t.IsBlank {
+				blankID = i
+			}
 			if pl.Tile == t {
+				found = true
 				// remove found tile from hand
-				if i == len(p.tiles) {
-					p.tiles = p.tiles[:i]
-				} else {
-					p.tiles = append(p.tiles[:i], p.tiles[i+1:]...)
-				}
+				p.removeTile(i)
+				break
 			}
 		}
+		if !found && blankID >= 0 {
+			p.removeTile(blankID)
+		}
+	}
+}
+
+// removeTile deletes a specified tile index from
+func (p *Player) removeTile(i int) {
+	if i == len(p.tiles) {
+		p.tiles = p.tiles[:i]
+	} else {
+		p.tiles = append(p.tiles[:i], p.tiles[i+1:]...)
 	}
 }
 

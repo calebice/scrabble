@@ -33,7 +33,7 @@ func parseTilePlacements(tokens []string) ([]TilePlacement, error) {
 			return nil, ErrTileFormat
 		}
 		rawX := coord[0]
-		rawY := coord[1]
+		rawY := strings.TrimSpace(coord[1])
 
 		y, err := strconv.Atoi(rawY)
 		if err != nil {

@@ -126,6 +126,9 @@ func runControlLoop(reader *bufio.Reader, game *scrabble.Game, gameDB *scrabble.
 
 	for {
 		current := game.CurrentPlayer()
+		if current.UsePlainText {
+			fmt.Println("DISCLAIMER ------ THE FOLLOWING IS FOR A TEXT BASED GAME OF SCRABBLE -------")
+		}
 		fmt.Printf("%s: %v\n%s\n", current.Name,
 			current.Score(), current.Tiles())
 		fmt.Println(game.GetBoard().FormatPrint(current.UsePlainText))
