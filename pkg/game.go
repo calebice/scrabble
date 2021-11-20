@@ -234,18 +234,17 @@ func (game *Game) ApplyTurn(input string, gameDB *GameDB) (Result, error) {
 	}
 
 	result.Action = tokens[0]
-	switch tokens[0] {
+	tokens = tokens[1:]
+	switch result.Action {
 	case "swap":
 		// Format of `swap a b c d`
-		tokens = tokens[1:]
 		tiles := parseTiles(tokens)
 		err = game.SwapTiles(tiles)
 		result.Swapped = len(tiles)
 
 	case "place":
 		// Format of `place a(1,a) b(2,a)`
-		tilePlacements := tokens[1:]
-		placements, err = parseTilePlacements(tilePlacements)
+		placements, err = parseTilePlacements(tokens)
 		if err != nil {
 			return Result{}, err
 		}
